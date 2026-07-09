@@ -1,14 +1,17 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.api.v1.users import router as user_router
 from app.core.config import settings
 from app.database.database import engine
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="AI Powered Fraud Detection Platform"
+    description="AI Powered Fraud Detection Platform",
 )
+
+app.include_router(user_router)
 
 
 @app.on_event("startup")
@@ -22,7 +25,7 @@ def startup():
 def root():
     return {
         "message": "Welcome to FraudLens!",
-        "version": settings.APP_VERSION
+        "version": settings.APP_VERSION,
     }
 
 
@@ -30,5 +33,5 @@ def root():
 def health_check():
     return {
         "status": "healthy",
-        "application": settings.APP_NAME
+        "application": settings.APP_NAME,
     }
