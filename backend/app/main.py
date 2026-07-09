@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from app.api.v1.users import router as user_router
+from app.api.v1.api import api_router
 from app.core.config import settings
 from app.database.database import engine
+from app.core.exceptions import register_exception_handlers
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -11,8 +12,9 @@ app = FastAPI(
     description="AI Powered Fraud Detection Platform",
 )
 
-app.include_router(user_router)
+register_exception_handlers(app)
 
+app.include_router(api_router)
 
 @app.on_event("startup")
 def startup():
