@@ -111,43 +111,26 @@ def render_customer_portal(token: str, user_profile: dict):
                     selected_tx = tx_options[selected_tx_label]
                     
                     st.markdown("---")
-                    st.markdown(f"#### Evaluation Audit for Transaction #{selected_tx['id']}")
-                    
-                    # Status styling
-                    status_val = selected_tx["status"]
-                    if status_val == "APPROVED":
-                        st.markdown(f"**Security Decision**: :green[APPROVED]")
-                    elif status_val == "REVIEW":
-                        st.markdown(f"**Security Decision**: :orange[UNDER REVIEW]")
-                    elif status_val == "BLOCKED":
-                        st.markdown(f"**Security Decision**: :red[BLOCKED / SUSPENDED]")
-                    
-                    # Fetch detailed explanation (if exists)
-                    # We can fetch profile/evaluation. Note: Customer doesn't see raw evaluations, 
-                    # but they see the customer_explanation. Let's get it by fetching their transactions list.
-                    # The transaction service returns explanations if evaluated. Let's check!
-                    # Wait, our TransactionResponse schema contains the status and details. Let's see if customer_explanation is in it.
-                    # Wait, yes! The customer_explanation is saved in the evaluation table, but we can return it.
-                    # If it is in the database, we can check.
-                    # Wait! In our transaction service, we loaded it or evaluated it. Let's see how we can fetch customer explanation.
-                    # We added a field `customer_explanation` to our AnalystTransactionListItem schema, but in `TransactionResponse` we didn't add it.
-                    # However, we can write a quick custom check: since the analyst evaluate endpoint is require_role("analyst"), the customer cannot hit it directly.
-                    # But we saved it in FraudEvaluation, and we can read it. 
-                    # Wait! In `app/schemas/transaction.py`, did we add it? Let's check!
-                    # If not, let's look at what fields are in TransactionResponse. 
-                    # It has id, sender_id, receiver_name, amount, payment_method, device_id, city, ip_address, merchant_category, country, status, created_at.
-                    # But wait, how does a customer read the explanation?
-                    # The customer API GET `/transactions/` retrieves the list of transactions.
-                    # Let's show a user-friendly custom explanation card if it is not in the transaction model, or we can just fetch it!
-                    # Let's show a beautiful card:
-                    st.info(f"**Security Alert & Advice**:\n\n{selected_tx.get('customer_explanation', 'Your payment was verified through our multi-stage AI fraud scoring pipeline and cleared for execution.')}")
-                    
-                    if status_val in ["REVIEW", "BLOCKED"]:
-                        st.error("Did you not initiate this payment? Let us know immediately.")
-                        report_clicked = st.button("Report: This Wasn't Me", key=f"report_{selected_tx['id']}")
-                        if report_clicked:
-                            st.toast("Security alert sent to fraud response team! Your account holds have been updated.")
-                            st.success("Feedback recorded. An investigator has been assigned to lock this device profile.")
+                    with st.container(border=True):
+                        st.markdown(f"#### Evaluation Audit for Transaction #{selected_tx['id']}")
+                        
+                        # Status styling
+                        status_val = selected_tx["status"]
+                        if status_val == "APPROVED":
+                            st.markdown(f"**Security Decision**: :green[APPROVED]")
+                        elif status_val == "REVIEW":
+                            st.markdown(f"**Security Decision**: :orange[UNDER REVIEW]")
+                        elif status_val == "BLOCKED":
+                            st.markdown(f"**Security Decision**: :red[BLOCKED / SUSPENDED]")
+                        
+                        st.info(f"**Security Alert & Advice**:\n\n{selected_tx.get('customer_explanation', 'Your payment was verified through our multi-stage AI fraud scoring pipeline and cleared for execution.')}")
+                        
+                        if status_val in ["REVIEW", "BLOCKED"]:
+                            st.error("Did you not initiate this payment? Let us know immediately.")
+                            report_clicked = st.button("Report: This Wasn't Me", key=f"report_{selected_tx['id']}")
+                            if report_clicked:
+                                st.toast("Security alert sent to fraud response team! Your account holds have been updated.")
+                                st.success("Feedback recorded. An investigator has been assigned to lock this device profile.")
                             
         except Exception as e:
             st.error(f"Error fetching logs: {e}")

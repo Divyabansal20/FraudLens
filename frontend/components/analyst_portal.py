@@ -88,19 +88,37 @@ def render_analyst_portal(token: str, user_profile: dict):
             st.success("Review queue is completely clean! No pending investigations.")
         else:
             st.markdown("### Labeled Flag Holds")
-            st.markdown("Select a transaction below to run a deep-dive security audit.")
+            st.markdown("Below are the transactions pending investigator audit.")
             
-            # Map review transactions to dictionary
+            queue_data = []
+            for t in review_queue:
+                try:
+                    dt = datetime.fromisoformat(t["created_at"]).strftime("%Y-%m-%d %H:%M")
+                except:
+                    dt = t["created_at"]
+                queue_data.append({
+                    "Transaction ID": t["id"],
+                    "Sender ID": t["sender_id"],
+                    "Receiver": t["receiver_name"],
+                    "Amount (INR)": f"₹{t['amount']:,}",
+                    "Device": t["device_id"],
+                    "Location": t["city"],
+                    "Risk Score": t.get("aggregated_score", "N/A"),
+                    "Date": dt
+                })
+            st.dataframe(pd.DataFrame(queue_data), use_container_width=True, hide_index=True)
+
+            # Select transaction dropdown in a separate visual selector block
+            st.markdown("---")
+            st.markdown("### Select a Transaction to Run Audit")
             review_options = {
                 f"ID #{t['id']} | User {t['sender_id']} to {t['receiver_name']} (₹{t['amount']:,}) - Score: {t.get('aggregated_score', 'N/A')}": t
                 for t in review_queue
             }
-            
-            selected_tx_label = st.selectbox("Select Transaction to Inspect", list(review_options.keys()))
+            selected_tx_label = st.selectbox("Active Case Target", list(review_options.keys()))
             
             if selected_tx_label:
                 selected_tx = review_options[selected_tx_label]
-                st.markdown("---")
                 
                 # Fetch detailed evaluation
                 try:
@@ -110,129 +128,142 @@ def render_analyst_portal(token: str, user_profile: dict):
                     st.error(f"Failed to fetch evaluation details: {e}")
                     return
 
+                # Visual Divider separating case file from selection dropdown
+                st.markdown("---")
+                st.markdown(f"## Transaction Case File: ID #{selected_tx['id']}")
+
+                # 1. Transaction Summary Block
+                with st.container(border=True):
+                    st.markdown("#### Transaction Summary")
+                    col_det1, col_det2, col_det3, col_det4 = st.columns(4)
+                    with col_det1:
+                        st.markdown(f"**Transaction ID**: {selected_tx['id']}\n\n**Sender ID**: {selected_tx['sender_id']}")
+                    with col_det2:
+                        st.markdown(f"**Receiver Name**: {selected_tx['receiver_name']}\n\n**Amount**: ₹{selected_tx['amount']:,}")
+                    with col_det3:
+                        st.markdown(f"**Device ID**: {selected_tx['device_id']}\n\n**Payment Method**: {selected_tx['payment_method']}")
+                    with col_det4:
+                        st.markdown(f"**Location**: {selected_tx['city']}, {selected_tx['country']}\n\n**Submitted**: {datetime.fromisoformat(selected_tx['created_at']).strftime('%Y-%m-%d %H:%M') if 'created_at' in selected_tx else 'N/A'}")
+
+                # 2. Risk Scoring & Security Rules
                 col_left, col_right = st.columns([1, 1])
                 
                 with col_left:
-                    st.markdown("#### Transaction Metadata")
-                    df_meta = pd.DataFrame([
-                        {"Attribute": "Transaction ID", "Value": str(selected_tx["id"])},
-                        {"Attribute": "Sender ID", "Value": str(selected_tx["sender_id"])},
-                        {"Attribute": "Receiver Name", "Value": selected_tx["receiver_name"]},
-                        {"Attribute": "Amount", "Value": f"₹{selected_tx['amount']:,}"},
-                        {"Attribute": "Device ID", "Value": selected_tx["device_id"]},
-                        {"Attribute": "City / Location", "Value": selected_tx["city"]},
-                        {"Attribute": "IP Address", "Value": selected_tx["ip_address"]},
-                        {"Attribute": "Merchant Category", "Value": selected_tx["merchant_category"]},
-                        {"Attribute": "Country", "Value": selected_tx["country"]},
-                        {"Attribute": "Submitted At", "Value": datetime.fromisoformat(selected_tx["created_at"]).strftime("%Y-%m-%d %H:%M") if "created_at" in selected_tx else "N/A"},
-                    ])
-                    st.dataframe(df_meta, hide_index=True, use_container_width=True)
-
-                    # Dynamic score card
-                    score = evaluation.get("aggregated_score", 0.0)
-                    st.markdown("#### Risk Score Aggregation")
-                    if score >= 80.0:
-                        st.error(f"Aggregated Score: **{score}/100** (CRITICAL RISK)")
-                    elif score >= 38.0:
-                        st.warning(f"Aggregated Score: **{score}/100** (MEDIUM RISK)")
-                    else:
-                        st.success(f"Aggregated Score: **{score}/100** (LOW RISK)")
-                    
-                    st.info(f"System Confidence: {evaluation.get('confidence', 0.5) * 100:.0f}%")
-
-                with col_right:
-                    st.markdown("#### Rule Engine Trigger Status")
-                    for rule in evaluation.get("triggered_rules", []):
-                        if rule.get("triggered", False):
-                            st.markdown(f"**{rule.get('rule_name')}** (+{rule.get('score_contribution')}): {rule.get('reason')}")
+                    with st.container(border=True):
+                        st.markdown("#### Risk Score Aggregation")
+                        score = evaluation.get("aggregated_score", 0.0)
+                        if score >= 80.0:
+                            st.error(f"Aggregated Score: **{score}/100** (CRITICAL RISK)")
+                        elif score >= 38.0:
+                            st.warning(f"Aggregated Score: **{score}/100** (MEDIUM RISK)")
                         else:
-                            st.markdown(f"*{rule.get('rule_name')}* (Safe): {rule.get('reason')}")
-
-                # deep dive sections
-                st.markdown("---")
-                st.markdown("### Multi-Engine Deep Dive Audit")
+                            st.success(f"Aggregated Score: **{score}/100** (LOW RISK)")
+                        
+                        st.info(f"System Confidence: {evaluation.get('confidence', 0.5) * 100:.0f}%")
                 
+                with col_right:
+                    with st.container(border=True):
+                        st.markdown("#### Triggered Security Rules")
+                        
+                        # Build a clean dataframe of rules
+                        rules_data = []
+                        for rule in evaluation.get("triggered_rules", []):
+                            status_str = "Triggered" if rule.get("triggered", False) else "Safe"
+                            contrib_val = f"+{rule.get('score_contribution')}" if rule.get("triggered", False) else "0.0"
+                            rules_data.append({
+                                "Rule Name": rule.get("rule_name"),
+                                "Status": status_str,
+                                "Risk Contrib": contrib_val,
+                                "Findings / Rationale": rule.get("reason")
+                            })
+                        
+                        if rules_data:
+                            st.dataframe(pd.DataFrame(rules_data), use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No security rules triggered.")
+
+                # 3. Engine Diagnostics Audits
+                st.markdown("### Engine Diagnostics Audits")
                 col_ml, col_graph = st.columns(2)
                 
                 with col_ml:
-                    st.markdown("#### ML Anomaly Profiler (Isolation Forest)")
-                    ml_details = evaluation.get("ml_details", {})
-                    st.metric("ML Anomaly Score", f"{ml_details.get('anomaly_score', 0.0)}/100")
-                    
-                    # Plot feature contributions
-                    contribs = ml_details.get("feature_contributions", {})
-                    if contribs:
-                        df_contribs = pd.DataFrame([
-                            {"Feature": feat.replace("_", " ").title(), "Contribution": weight * 100}
-                            for feat, weight in contribs.items()
-                        ])
-                        fig = px.bar(
-                            df_contribs, x="Contribution", y="Feature", orientation="h",
-                            title="ML Anomaly Feature Importances (%)",
-                            color_discrete_sequence=["#1f77b4"]
-                        )
-                        fig.update_layout(height=200, margin=dict(l=0, r=0, t=30, b=0))
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info("No feature contributions available.")
+                    with st.container(border=True):
+                        st.markdown("#### Machine Learning Anomaly Diagnostics")
+                        ml_details = evaluation.get("ml_details", {})
+                        st.metric("ML Anomaly Score", f"{ml_details.get('anomaly_score', 0.0)}/100")
+                        
+                        contribs = ml_details.get("feature_contributions", {})
+                        if contribs:
+                            df_contribs = pd.DataFrame([
+                                {"Feature": feat.replace("_", " ").title(), "Contribution": weight * 100}
+                                for feat, weight in contribs.items()
+                            ])
+                            fig = px.bar(
+                                df_contribs, x="Contribution", y="Feature", orientation="h",
+                                title="Feature Contribution Weights (%)",
+                                color_discrete_sequence=["#1f77b4"]
+                            )
+                            fig.update_layout(height=200, margin=dict(l=0, r=0, t=30, b=0))
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.info("No feature contributions available.")
 
                 with col_graph:
-                    st.markdown("#### Graph Relationship Network (NetworkX)")
-                    graph_details = evaluation.get("graph_details", {})
-                    st.metric("Graph Risk Score", f"{graph_details.get('risk_score', 0.0)}/100")
-                    
-                    # Draw graph diagram
-                    fig_graph = draw_network_graph(selected_tx, graph_details)
-                    st.pyplot(fig_graph)
-                    
-                    for pattern in graph_details.get("detected_patterns", []):
-                        st.warning(f"Pattern Alert: {pattern}")
+                    with st.container(border=True):
+                        st.markdown("#### Graph Relationship Network Analysis")
+                        graph_details = evaluation.get("graph_details", {})
+                        st.metric("Graph Risk Score", f"{graph_details.get('risk_score', 0.0)}/100")
+                        
+                        fig_graph = draw_network_graph(selected_tx, graph_details)
+                        st.pyplot(fig_graph)
+                        
+                        for pattern in graph_details.get("detected_patterns", []):
+                            st.warning(f"Connection Pattern: {pattern}")
 
-                # AI Explanations Display
-                st.markdown("---")
-                st.markdown("#### AI/LLM Security Explanations")
-                col_cust_exp, col_analyst_exp = st.columns(2)
-                with col_cust_exp:
-                    st.info(f"Customer-Facing Explanation:\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
-                with col_analyst_exp:
-                    st.info(f"Investigator-Facing explanation:\n\n{evaluation.get('analyst_explanation', 'N/A')}")
+                # 4. AI/LLM Security Explanations
+                st.markdown("### AI Generative Explanations")
+                with st.container(border=True):
+                    col_cust_exp, col_analyst_exp = st.columns(2)
+                    with col_cust_exp:
+                        st.info(f"**Customer-Facing Security Notice**:\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
+                    with col_analyst_exp:
+                        st.info(f"**Investigator Security Analysis Summary**:\n\n{evaluation.get('analyst_explanation', 'N/A')}")
 
-                # Analyst Decision Input
-                st.markdown("---")
-                st.markdown("#### Record Final Investigation Resolution")
-                
-                with st.form("decision_form"):
-                    notes = st.text_area("Resolution Audit Notes", placeholder="Provide rationale for override action (e.g. verified phone credentials)...")
-                    
-                    col_app, col_rej = st.columns(2)
-                    with col_app:
-                        submit_approve = st.form_submit_button("Clear & Approve Transaction", use_container_width=True)
-                    with col_rej:
-                        submit_reject = st.form_submit_button("Confirm Fraud & Permanently Block", use_container_width=True)
+                # 5. Analyst Decision Input Form
+                st.markdown("### Case Override Resolution")
+                with st.container(border=True):
+                    with st.form("decision_form"):
+                        notes = st.text_area("Audit Log Notes", placeholder="Provide investigation findings and action rationale...")
+                        
+                        col_app, col_rej = st.columns(2)
+                        with col_app:
+                            submit_approve = st.form_submit_button("Clear & Approve Transaction", use_container_width=True)
+                        with col_rej:
+                            submit_reject = st.form_submit_button("Confirm Fraud & Permanently Block", use_container_width=True)
 
-                    if submit_approve:
-                        if not notes:
-                            st.error("Please add resolution audit notes to approve.")
-                        else:
-                            try:
-                                api_client.submit_decision(token, selected_tx["id"], "FALSE_POSITIVE", notes)
-                                st.success("Decision Logged: Transaction cleared as False Positive! Supervised retraining queued.")
-                                st.toast("Retraining model in background task...")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed to submit decision: {e}")
-                                
-                    if submit_reject:
-                        if not notes:
-                            st.error("Please add resolution audit notes to block.")
-                        else:
-                            try:
-                                api_client.submit_decision(token, selected_tx["id"], "CONFIRMED_FRAUD", notes)
-                                st.success("Decision Logged: Transaction blocked as Confirmed Fraud! Supervised retraining queued.")
-                                st.toast("Retraining model in background task...")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Failed to submit decision: {e}")
+                        if submit_approve:
+                            if not notes:
+                                st.error("Please add resolution audit notes to approve.")
+                            else:
+                                try:
+                                    api_client.submit_decision(token, selected_tx["id"], "FALSE_POSITIVE", notes)
+                                    st.success("Decision Logged: Transaction cleared as False Positive! Supervised retraining queued.")
+                                    st.toast("Retraining model in background task...")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to submit decision: {e}")
+                                    
+                        if submit_reject:
+                            if not notes:
+                                st.error("Please add resolution audit notes to block.")
+                            else:
+                                try:
+                                    api_client.submit_decision(token, selected_tx["id"], "CONFIRMED_FRAUD", notes)
+                                    st.success("Decision Logged: Transaction blocked as Confirmed Fraud! Supervised retraining queued.")
+                                    st.toast("Retraining model in background task...")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Failed to submit decision: {e}")
 
     with tab_blocked:
         st.markdown("### Suspended Payment Logs")
