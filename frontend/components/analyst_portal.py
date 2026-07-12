@@ -144,43 +144,40 @@ def render_analyst_portal(token: str, user_profile: dict):
                         st.markdown(f"**Device ID**: {selected_tx['device_id']}\n\n**Payment Method**: {selected_tx['payment_method']}")
                     with col_det4:
                         st.markdown(f"**Location**: {selected_tx['city']}, {selected_tx['country']}\n\n**Submitted**: {datetime.fromisoformat(selected_tx['created_at']).strftime('%Y-%m-%d %H:%M') if 'created_at' in selected_tx else 'N/A'}")
-
-                # 2. Risk Scoring & Security Rules
-                col_left, col_right = st.columns([1, 1])
-                
-                with col_left:
-                    with st.container(border=True):
-                        st.markdown("#### Risk Score Aggregation")
-                        score = evaluation.get("aggregated_score", 0.0)
+                    
+                    st.markdown("---")
+                    # Risk Aggregation inside summary
+                    score = evaluation.get("aggregated_score", 0.0)
+                    col_score, col_conf = st.columns([2, 1])
+                    with col_score:
                         if score >= 80.0:
                             st.error(f"Aggregated Score: **{score}/100** (CRITICAL RISK)")
                         elif score >= 38.0:
                             st.warning(f"Aggregated Score: **{score}/100** (MEDIUM RISK)")
                         else:
                             st.success(f"Aggregated Score: **{score}/100** (LOW RISK)")
-                        
+                    with col_conf:
                         st.info(f"System Confidence: {evaluation.get('confidence', 0.5) * 100:.0f}%")
-                
-                with col_right:
-                    with st.container(border=True):
-                        st.markdown("#### Triggered Security Rules")
-                        
-                        # Build a clean dataframe of rules
-                        rules_data = []
-                        for rule in evaluation.get("triggered_rules", []):
-                            status_str = "Triggered" if rule.get("triggered", False) else "Safe"
-                            contrib_val = f"+{rule.get('score_contribution')}" if rule.get("triggered", False) else "0.0"
-                            rules_data.append({
-                                "Rule Name": rule.get("rule_name"),
-                                "Status": status_str,
-                                "Risk Contrib": contrib_val,
-                                "Findings / Rationale": rule.get("reason")
-                            })
-                        
-                        if rules_data:
-                            st.dataframe(pd.DataFrame(rules_data), use_container_width=True, hide_index=True)
-                        else:
-                            st.info("No security rules triggered.")
+
+                # 2. Rule Engine Trigger Status (Full Width Horizontal Table under Metadata summary)
+                with st.container(border=True):
+                    st.markdown("#### Triggered Security Rules")
+                    
+                    # Build a clean 2-column dataframe of rules
+                    rules_data = []
+                    for rule in evaluation.get("triggered_rules", []):
+                        status_str = "TRIGGERED" if rule.get("triggered", False) else "SAFE"
+                        contrib_val = f"+{rule.get('score_contribution')}" if rule.get("triggered", False) else "0.0"
+                        check_name = f"{rule.get('rule_name')} ({status_str} | Contrib: {contrib_val})"
+                        rules_data.append({
+                            "Security Check": check_name,
+                            "Findings & Rationale": rule.get("reason")
+                        })
+                    
+                    if rules_data:
+                        st.dataframe(pd.DataFrame(rules_data), use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No security rules triggered.")
 
                 # 3. Engine Diagnostics Audits
                 st.markdown("### Engine Diagnostics Audits")
@@ -216,18 +213,26 @@ def render_analyst_portal(token: str, user_profile: dict):
                         
                         fig_graph = draw_network_graph(selected_tx, graph_details)
                         st.pyplot(fig_graph)
-                        
-                        for pattern in graph_details.get("detected_patterns", []):
-                            st.warning(f"Connection Pattern: {pattern}")
 
-                # 4. AI/LLM Security Explanations
+                # Pattern alerts below ML and Graph pictures in horizontal cards beside each other (2 cards per row)
+                patterns = graph_details.get("detected_patterns", [])
+                if patterns:
+                    st.markdown("#### Detected Network Connection Alerts")
+                    for i in range(0, len(patterns), 2):
+                        col_p1, col_p2 = st.columns(2)
+                        with col_p1:
+                            with st.container(border=True):
+                                st.warning(f"Connection Pattern Alert:\n\n{patterns[i]}")
+                        if i + 1 < len(patterns):
+                            with col_p2:
+                                with st.container(border=True):
+                                    st.warning(f"Connection Pattern Alert:\n\n{patterns[i+1]}")
+
+                # 4. AI/LLM Security Explanations (Full width, stacked vertically)
                 st.markdown("### AI Generative Explanations")
                 with st.container(border=True):
-                    col_cust_exp, col_analyst_exp = st.columns(2)
-                    with col_cust_exp:
-                        st.info(f"**Customer-Facing Security Notice**:\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
-                    with col_analyst_exp:
-                        st.info(f"**Investigator Security Analysis Summary**:\n\n{evaluation.get('analyst_explanation', 'N/A')}")
+                    st.info(f"**Customer-Facing Security Notice**\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
+                    st.info(f"**Investigator Security Analysis Summary**\n\n{evaluation.get('analyst_explanation', 'N/A')}")
 
                 # 5. Analyst Decision Input Form
                 st.markdown("### Case Override Resolution")
