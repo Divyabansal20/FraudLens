@@ -59,21 +59,55 @@ if st.session_state.token:
         st.session_state.auth_mode = "login"
         st.toast("Logged out successfully.")
         st.rerun()
-else:
-    st.sidebar.markdown("### FraudLens Core")
-    st.sidebar.markdown("---")
-    st.sidebar.info("Please log in or register to securely transact or manage investigation cases.")
 
 # Main Application Core
 if not st.session_state.token:
     st.title("FraudLens Platform")
     st.markdown("##### Real-Time AI Fraud Detection & Network Graph Analysis Gateway")
+    st.markdown("---")
     
-    col_l, col_r = st.columns([1, 1])
+    col_l, col_r = st.columns([1.2, 1])
     
     with col_l:
-        st.image("payment_security_banner.png", use_container_width=True, caption="Real-time multi-stage digital payment screening.")
-    
+        # Innovative Catchy Explainer Section (Emojis removed)
+        st.markdown("""
+        <div style="
+            background: rgba(30, 41, 59, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1.75rem;
+            border-radius: 16px;
+            margin-top: 1.5rem;
+            margin-bottom: 2.25rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        ">
+            <h3 style="color: #38bdf8; font-family: 'Inter', sans-serif; font-weight: 700; margin-top: 0; margin-bottom: 0.75rem;">
+                Your Smart Payment Guardian
+            </h3>
+            <p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.25rem;">
+                Welcome to <strong>FraudLens</strong>—a state-of-the-art payment screening platform. 
+                We secure every transaction using real-time intelligent analysis:
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 1rem; color: #cbd5e1; font-family: 'Inter', sans-serif; font-size: 0.9rem;">
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="color: #38bdf8; font-weight: bold; font-size: 1.1rem; line-height: 1;">&bull;</span>
+                    <span><strong>Real-time screening</strong> checks transactions in milliseconds.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="color: #38bdf8; font-weight: bold; font-size: 1.1rem; line-height: 1;">&bull;</span>
+                    <span><strong>AI Risk Engine</strong> detects user behavior anomalies.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="color: #38bdf8; font-weight: bold; font-size: 1.1rem; line-height: 1;">&bull;</span>
+                    <span><strong>Network Graphs</strong> trace connection link threats.</span>
+                </div>
+                <div style="display: flex; align-items: flex-start; gap: 8px;">
+                    <span style="color: #38bdf8; font-weight: bold; font-size: 1.1rem; line-height: 1;">&bull;</span>
+                    <span><strong>Secure Portal</strong> keeps accounts safe.</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
     with col_r:
         if st.session_state.auth_mode == "login":
             st.subheader("Login Gateway")
