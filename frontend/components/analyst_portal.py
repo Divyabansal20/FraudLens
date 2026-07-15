@@ -191,7 +191,7 @@ def render_graph_connection_audit(patterns):
 
     content = []
     content.append("### 🕸️ Graph Network Relationship Audit")
-    content.append("A consolidated review of relationship connections and shared entity footprints detected by the network graph engine:")
+    content.append("Relationship analysis of entities linked to this transaction.")
     content.append("---")
 
     if direct_links:
@@ -228,7 +228,7 @@ def render_graph_connection_audit(patterns):
 
 def render_analyst_portal(token: str, user_profile: dict):
     st.subheader("FraudLens Investigator Workspace")
-    st.markdown("Monitor high-risk queues, inspect machine learning anomaly profiles, and audit relation networks.")
+    st.markdown("Prioritize, investigate, and resolve suspicious financial transactions.")
 
     # Load data for metrics
     try:
@@ -254,7 +254,7 @@ def render_analyst_portal(token: str, user_profile: dict):
             st.success("Review queue is completely clean! No pending investigations.")
         else:
             st.markdown("### Labeled Flag Holds")
-            st.markdown("Below are the transactions pending investigator audit.")
+            st.markdown("Transactions awaiting analyst review.")
             
             queue_data = []
             for t in review_queue:
@@ -336,6 +336,9 @@ def render_analyst_portal(token: str, user_profile: dict):
                             st.success(f"Aggregated Score: **{score}/100** (LOW RISK)")
                     with col_conf:
                         st.info(f"System Confidence: {evaluation.get('confidence', 0.5) * 100:.0f}%")
+                    
+                    st.markdown("---")
+                    st.markdown(f"**Customer Notification Notice:** *\"{evaluation.get('customer_explanation', 'N/A')}\"*")
 
                 # 2. Rule Engine Trigger Status (Full Width Horizontal Table under Metadata summary)
                 with st.container(border=True):
@@ -411,11 +414,7 @@ def render_analyst_portal(token: str, user_profile: dict):
                 if patterns:
                     render_graph_connection_audit(patterns)
 
-                # 4. AI/LLM Security Explanations (Full width, stacked vertically)
-                st.markdown("### AI Generative Explanations")
-                with st.container(border=True):
-                    st.info(f"**Customer-Facing Security Notice**\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
-                    st.info(f"**Investigator Security Analysis Summary**\n\n{evaluation.get('analyst_explanation', 'N/A')}")
+
 
                 # 5. Analyst Decision Input Form
                 st.markdown("### Case Override Resolution")
@@ -542,6 +541,9 @@ def render_analyst_portal(token: str, user_profile: dict):
                                 st.success(f"Aggregated Score: **{score}/100** (LOW RISK)")
                         with col_conf:
                             st.info(f"System Confidence: {evaluation.get('confidence', 0.5) * 100:.0f}%")
+                        
+                        st.markdown("---")
+                        st.markdown(f"**Customer Notification Notice:** *\"{evaluation.get('customer_explanation', 'N/A')}\"*")
 
                     # 2. Rule Engine Trigger Status
                     with st.container(border=True):
@@ -616,9 +618,5 @@ def render_analyst_portal(token: str, user_profile: dict):
                     if patterns:
                         render_graph_connection_audit(patterns)
 
-                    # 4. AI/LLM Security Explanations
-                    st.markdown("### AI Generative Explanations")
-                    with st.container(border=True):
-                        st.info(f"**Customer-Facing Security Notice**\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
-                        st.info(f"**Investigator Security Analysis Summary**\n\n{evaluation.get('analyst_explanation', 'N/A')}")
+
 
