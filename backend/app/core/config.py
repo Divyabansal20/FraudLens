@@ -2,9 +2,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    APP_NAME: str
-    APP_VERSION: str
-    DEBUG: bool
+    APP_NAME: str = "FraudLens"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = False
 
     DATABASE_URL: str
 
