@@ -65,6 +65,21 @@ class FraudEvaluation(Base):
         Text, 
         nullable=True
     )
+
+    behavior_drift_score: Mapped[float] = mapped_column(
+        Float,
+        default=0.0
+    )
+
+    ai_recommendation: Mapped[str] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    ai_investigation_summary: Mapped[str] = mapped_column(
+        Text,
+        nullable=True
+    )
     
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 

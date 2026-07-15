@@ -31,6 +31,9 @@ class FraudEvaluationResponse(BaseModel):
     graph_details: Dict[str, Any]
     customer_explanation: Optional[str]
     analyst_explanation: Optional[str]
+    behavior_drift_score: Optional[float] = 0.0
+    ai_recommendation: Optional[str] = None
+    ai_investigation_summary: Optional[str] = None
     created_at: datetime
 
     class Config:

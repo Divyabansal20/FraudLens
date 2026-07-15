@@ -15,11 +15,12 @@ class RiskAggregator:
         ml_score: float, 
         graph_score: float,
         ml_confidence: float,
+        behavior_drift_score: float = 0.0,
         graph_confidence: float = 0.8
     ) -> Tuple[float, float]:
         """
-        Combines scores from the three fraud engines:
-        Risk = (0.2 * Rule) + (0.4 * ML) + (0.4 * Graph)
+        Combines scores from the four fraud engines:
+        Risk = (0.2 * Rule) + (0.3 * ML) + (0.3 * Graph) + (0.2 * Behavior)
         
         Calculates aggregated confidence.
         
@@ -29,19 +30,22 @@ class RiskAggregator:
         """
         # Calculate weighted sum
         aggregated_score = (
-            (self.rule_weight * rule_score) +
-            (self.ml_weight * ml_score) +
-            (self.graph_weight * graph_score)
+            (0.20 * rule_score) +
+            (0.30 * ml_score) +
+            (0.30 * graph_score) +
+            (0.20 * behavior_drift_score)
         )
         
-        # Rule engine is deterministic, so its confidence is 1.0
+        # Rule engine is deterministic (1.0), behavior is 0.9
         rule_confidence = 1.0
+        behavior_confidence = 0.9
         
         # Combined confidence
         aggregated_confidence = (
-            (self.rule_weight * rule_confidence) +
-            (self.ml_weight * ml_confidence) +
-            (self.graph_weight * graph_confidence)
+            (0.20 * rule_confidence) +
+            (0.30 * ml_confidence) +
+            (0.30 * graph_confidence) +
+            (0.20 * behavior_confidence)
         )
 
         return float(round(aggregated_score, 1)), float(round(aggregated_confidence, 2))

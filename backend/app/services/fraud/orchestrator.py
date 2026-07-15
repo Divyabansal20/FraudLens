@@ -7,6 +7,8 @@ from app.services.fraud.ml.isolation_forest import IsolationForestAnomalyDetecto
 from app.services.fraud.graph.graph_detector import GraphFraudDetector
 from app.services.fraud.risk_aggregator import RiskAggregator
 from app.services.fraud.decision_engine import DecisionEngine
+from app.services.fraud.behavior_profile import BehaviorProfileEngine
+from app.services.fraud.investigator_assistant import AIInvestigatorAssistant
 
 
 class FraudOrchestrator:
@@ -16,6 +18,8 @@ class FraudOrchestrator:
         self.graph_detector = GraphFraudDetector()
         self.risk_aggregator = RiskAggregator()
         self.decision_engine = DecisionEngine()
+        self.behavior_profile = BehaviorProfileEngine()
+        self.ai_assistant = AIInvestigatorAssistant()
 
     def evaluate_transaction(self, db: Session, transaction: Transaction) -> FraudEvaluation:
         # 1. Fetch User historical transaction profile (only successfully APPROVED ones to avoid poisoning profile)
@@ -68,12 +72,16 @@ class FraudOrchestrator:
                 import logging
                 logging.getLogger("uvicorn.error").error(f"Error applying active learning model: {e}")
 
+        # 4.5. Run Behavior Profile Engine (lifestyle anomaly)
+        behavior_drift = self.behavior_profile.evaluate_behavior(transaction, db)
+
         # 5. Run Risk Assessment Engine
         agg_score, agg_confidence = self.risk_aggregator.aggregate_scores(
             rule_score=rule_score,
             ml_score=ml_score,
             graph_score=graph_score,
-            ml_confidence=ml_confidence
+            ml_confidence=ml_confidence,
+            behavior_drift_score=behavior_drift
         )
 
         # 6. Run Decision Engine
@@ -100,15 +108,21 @@ class FraudOrchestrator:
             cust_exp = llm_cust_exp
             analyst_exp = llm_analyst_exp
 
+        # AI Investigator Copilot RAG Briefing Summary & Recommendation
+        ai_summary, ai_recommendation = self.ai_assistant.generate_investigation_report(
+            transaction, behavior_drift, db
+        )
+
         # Update the transaction's status
         transaction.status = status
 
-        # 7. Construct FraudEvaluation DB Model
+        # 8. Construct FraudEvaluation DB Model
         evaluation = FraudEvaluation(
             transaction_id=transaction.id,
             rule_engine_score=rule_score,
             ml_anomaly_score=ml_score,
             graph_risk_score=graph_score,
+            behavior_drift_score=behavior_drift,
             aggregated_score=agg_score,
             confidence=agg_confidence,
             triggered_rules=serialized_rules,
@@ -123,7 +137,9 @@ class FraudOrchestrator:
                 "connected_fraud_accounts": connected_accounts
             },
             customer_explanation=cust_exp,
-            analyst_explanation=analyst_exp
+            analyst_explanation=analyst_exp,
+            ai_investigation_summary=ai_summary,
+            ai_recommendation=ai_recommendation
         )
 
         return evaluation

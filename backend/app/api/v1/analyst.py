@@ -152,10 +152,16 @@ def get_transaction_evaluation(
 
     # Re-evaluate the relationship network graph dynamically on the fly
     from app.services.fraud.graph.graph_detector import GraphFraudDetector
-    from app.core.config import settings
+    from app.services.fraud.behavior_profile import BehaviorProfileEngine
+    from app.services.fraud.investigator_assistant import AIInvestigatorAssistant
     
     graph_detector = GraphFraudDetector()
+    behavior_profile = BehaviorProfileEngine()
+    ai_assistant = AIInvestigatorAssistant()
+    
     graph_score, graph_patterns, connected_accounts = graph_detector.evaluate_network(tx, db)
+    behavior_drift = behavior_profile.evaluate_behavior(tx, db)
+    ai_summary, ai_recommendation = ai_assistant.generate_investigation_report(tx, behavior_drift, db)
     
     # Update evaluation details
     evaluation.graph_risk_score = graph_score
@@ -164,12 +170,16 @@ def get_transaction_evaluation(
         "detected_patterns": graph_patterns,
         "connected_fraud_accounts": connected_accounts
     }
+    evaluation.behavior_drift_score = behavior_drift
+    evaluation.ai_investigation_summary = ai_summary
+    evaluation.ai_recommendation = ai_recommendation
     
-    # Re-calculate aggregated score based on the new graph risk score
+    # Re-calculate aggregated score using the updated weights
     evaluation.aggregated_score = round(
-        (evaluation.rule_engine_score * settings.FRAUD_RULE_WEIGHT) +
-        (evaluation.ml_anomaly_score * settings.FRAUD_ML_WEIGHT) +
-        (graph_score * settings.FRAUD_GRAPH_WEIGHT),
+        (evaluation.rule_engine_score * 0.20) +
+        (evaluation.ml_anomaly_score * 0.30) +
+        (graph_score * 0.30) +
+        (behavior_drift * 0.20),
         2
     )
     

@@ -298,6 +298,18 @@ def render_analyst_portal(token: str, user_profile: dict):
                 st.markdown("---")
                 st.markdown(f"## Transaction Case File: ID #{selected_tx['id']}")
 
+                # AI Copilot Case Briefing (RAG Briefing)
+                with st.container(border=True):
+                    st.markdown("### 🤖 AI Copilot Case Briefing (RAG)")
+                    ai_summary = evaluation.get("ai_investigation_summary", "Retrieving similar fraud precedents...")
+                    ai_rec = evaluation.get("ai_recommendation", "Formulating action plan...")
+                    
+                    col_brief_sum, col_brief_rec = st.columns([2, 1])
+                    with col_brief_sum:
+                        st.markdown(f"**Investigation Summary:**\n{ai_summary}")
+                    with col_brief_rec:
+                        st.warning(f"**AI Recommendation:**\n\n{ai_rec}")
+
                 # 1. Transaction Summary Block
                 with st.container(border=True):
                     st.markdown("#### Transaction Summary")
@@ -347,7 +359,7 @@ def render_analyst_portal(token: str, user_profile: dict):
 
                 # 3. Engine Diagnostics Audits
                 st.markdown("### Engine Diagnostics Audits")
-                col_ml, col_graph = st.columns(2)
+                col_ml, col_graph, col_behavior = st.columns(3)
                 
                 with col_ml:
                     with st.container(border=True):
@@ -380,7 +392,21 @@ def render_analyst_portal(token: str, user_profile: dict):
                         fig_graph = draw_network_graph(selected_tx, graph_details)
                         st.pyplot(fig_graph)
 
-                # Pattern alerts below ML and Graph pictures
+                with col_behavior:
+                    with st.container(border=True):
+                        st.markdown("#### AI Behavior Profile Analysis")
+                        drift_score = evaluation.get("behavior_drift_score", 0.0)
+                        st.metric("Behavior Drift Score", f"{drift_score}/100")
+                        
+                        st.write("Deviation Rationale:")
+                        if drift_score >= 80.0:
+                            st.error("Critical Profile Shift: Payment pattern strongly deviates from user history.")
+                        elif drift_score >= 40.0:
+                            st.warning("Moderate Profile Shift: Spend amount or device does not match standard habits.")
+                        else:
+                            st.success("Normal profile alignment: Pattern matches customer transaction records.")
+
+                # Pattern alerts below ML, Graph, and Behavior pictures
                 patterns = graph_details.get("detected_patterns", [])
                 if patterns:
                     render_graph_connection_audit(patterns)
@@ -478,6 +504,18 @@ def render_analyst_portal(token: str, user_profile: dict):
                     st.markdown("---")
                     st.markdown(f"## Blocked Transaction Case File: ID #{selected_blocked_tx['id']}")
 
+                    # AI Copilot Case Briefing (RAG Briefing)
+                    with st.container(border=True):
+                        st.markdown("### 🤖 AI Copilot Case Briefing (RAG)")
+                        ai_summary = evaluation.get("ai_investigation_summary", "Retrieving similar fraud precedents...")
+                        ai_rec = evaluation.get("ai_recommendation", "Formulating action plan...")
+                        
+                        col_brief_sum, col_brief_rec = st.columns([2, 1])
+                        with col_brief_sum:
+                            st.markdown(f"**Investigation Summary:**\n{ai_summary}")
+                        with col_brief_rec:
+                            st.warning(f"**AI Recommendation:**\n\n{ai_rec}")
+
                     # 1. Transaction Summary Block
                     with st.container(border=True):
                         st.markdown("#### Transaction Summary")
@@ -526,7 +564,7 @@ def render_analyst_portal(token: str, user_profile: dict):
 
                     # 3. Engine Diagnostics Audits
                     st.markdown("### Engine Diagnostics Audits")
-                    col_ml, col_graph = st.columns(2)
+                    col_ml, col_graph, col_behavior = st.columns(3)
                     
                     with col_ml:
                         with st.container(border=True):
@@ -558,6 +596,20 @@ def render_analyst_portal(token: str, user_profile: dict):
                             
                             fig_graph = draw_network_graph(selected_blocked_tx, graph_details)
                             st.pyplot(fig_graph)
+
+                    with col_behavior:
+                        with st.container(border=True):
+                            st.markdown("#### AI Behavior Profile Analysis")
+                            drift_score = evaluation.get("behavior_drift_score", 0.0)
+                            st.metric("Behavior Drift Score", f"{drift_score}/100")
+                            
+                            st.write("Deviation Rationale:")
+                            if drift_score >= 80.0:
+                                st.error("Critical Profile Shift: Payment pattern strongly deviates from user history.")
+                            elif drift_score >= 40.0:
+                                st.warning("Moderate Profile Shift: Spend amount or device does not match standard habits.")
+                            else:
+                                st.success("Normal profile alignment: Pattern matches customer transaction records.")
 
                     # Pattern alerts below ML and Graph
                     patterns = graph_details.get("detected_patterns", [])

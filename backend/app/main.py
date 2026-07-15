@@ -22,6 +22,20 @@ def startup():
         connection.execute(text("SELECT 1"))
         print("Database connected successfully!")
 
+    # Self-healing schema migrations for new AI Behavior Profile & RAG copilot columns
+    for sql in [
+        "ALTER TABLE fraud_evaluations ADD COLUMN behavior_drift_score FLOAT DEFAULT 0.0",
+        "ALTER TABLE fraud_evaluations ADD COLUMN ai_recommendation TEXT",
+        "ALTER TABLE fraud_evaluations ADD COLUMN ai_investigation_summary TEXT"
+    ]:
+        try:
+            with engine.begin() as connection:
+                connection.execute(text(sql))
+            print(f"Self-healing database updated: {sql}")
+        except Exception:
+            # Column already exists or table not ready yet
+            pass
+
 
 @app.get("/")
 def root():
