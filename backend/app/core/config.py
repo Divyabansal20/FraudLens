@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
 
-    REDIS_URL: str
+    REDIS_URL: str = "redis://localhost:6379"
 
     # Fraud Detection Engine configuration settings
     FRAUD_RULE_WEIGHT: float = 0.25
