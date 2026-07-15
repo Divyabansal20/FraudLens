@@ -86,10 +86,34 @@ class DecisionEngine:
             
         else:  # BLOCKED
             # Check critical rule triggers
-            is_blacklisted = any(r.rule_name in ["BLACKLISTED_RECEIVER", "BLACKLISTED_IP", "BLACKLISTED_DEVICE"] for r in active_rules)
+            is_blacklisted = any(r.rule_name in ["BLACKLISTED_RECEIVER", "BLACKLISTED_IP", "BLACKLISTED_DEVICE", "SHARED_DEVICE_BLACKLIST_RECEIVER"] for r in active_rules)
             if is_blacklisted:
-                return "This transaction was blocked because it was sent to an account, device, or location flagged on our security blacklist."
+                return "This transaction was blocked because it was sent to or associated with an account, device, or IP address flagged on our security blacklist."
                 
+            # Compile customer-friendly reasons
+            reasons = []
+            for r in active_rules:
+                if r.rule_name == "LARGE_AMOUNT_NEW_DEVICE":
+                    reasons.append("a high payment amount on an unrecognized device")
+                elif r.rule_name == "VELOCITY":
+                    reasons.append("too many rapid transactions in a short timeframe")
+                elif r.rule_name == "IMPOSSIBLE_TRAVEL":
+                    reasons.append("impossible movement across locations in a short timeframe")
+                elif r.rule_name == "MULTI_ANOMALY":
+                    reasons.append("multiple behavioral deviations detected simultaneously")
+                elif r.rule_name in ["PERCENTILE_AMOUNT_EXCEEDED", "AVERAGE_AMOUNT_EXCEEDED"]:
+                    reasons.append("a transfer amount significantly higher than your typical average")
+                elif r.rule_name == "NEW_DEVICE":
+                    reasons.append("an unrecognized device footprint")
+                elif r.rule_name == "NEW_CITY":
+                    reasons.append("an unusual login location")
+                elif r.rule_name == "UNUSUAL_HOUR":
+                    reasons.append("an atypical payment hour")
+
+            if reasons:
+                reasons_str = ", ".join(reasons[:3])
+                return f"This transaction was blocked by our automated security systems due to: {reasons_str}. If you believe this is an error, please contact support."
+
             return "This transaction was blocked by our automated security systems due to multiple high-risk indicators. If you believe this is an error, please contact support."
 
     def _generate_analyst_explanation(

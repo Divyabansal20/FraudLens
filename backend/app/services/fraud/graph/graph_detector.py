@@ -41,7 +41,7 @@ class GraphFraudDetector:
             G = nx.Graph()
             
             # Nodes are prefixed to prevent collision:
-            # u:user_id, d:device_id, r:receiver_name, ip:ip_address, m:merchant_category
+            # u:user_id, d:device_id, r:receiver_name, ip:ip_address
             for t in txs:
                 u_node = f"u:{t.sender_id}"
                 
@@ -62,11 +62,6 @@ class GraphFraudDetector:
                     ip_node = f"ip:{t.ip_address}"
                     G.add_node(ip_node, type="ip", label=t.ip_address)
                     G.add_edge(u_node, ip_node, relationship="connected_ip")
-                    
-                if t.merchant_category:
-                    m_node = f"m:{t.merchant_category.lower()}"
-                    G.add_node(m_node, type="merchant", label=t.merchant_category)
-                    G.add_edge(u_node, m_node, relationship="visited_merchant")
 
             # 3. Identify Suspicious / Blacklisted Nodes
             suspicious_nodes: Set[str] = set()

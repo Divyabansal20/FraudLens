@@ -128,7 +128,16 @@ def get_transaction_evaluation(
 ):
     """
     Retrieve the detailed multi-engine evaluation details for a transaction.
+    Recalculates the graph relationship network on the fly to ensure
+    it reflects the latest active threat paths and updates the DB record.
     """
+    tx = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transaction ID {transaction_id} not found",
+        )
+
     evaluation = (
         db.query(FraudEvaluation)
         .filter(FraudEvaluation.transaction_id == transaction_id)
@@ -140,6 +149,34 @@ def get_transaction_evaluation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Evaluation not found for transaction ID {transaction_id}",
         )
+
+    # Re-evaluate the relationship network graph dynamically on the fly
+    from app.services.fraud.graph.graph_detector import GraphFraudDetector
+    from app.core.config import settings
+    
+    graph_detector = GraphFraudDetector()
+    graph_score, graph_patterns, connected_accounts = graph_detector.evaluate_network(tx, db)
+    
+    # Update evaluation details
+    evaluation.graph_risk_score = graph_score
+    evaluation.graph_details = {
+        "risk_score": graph_score,
+        "detected_patterns": graph_patterns,
+        "connected_fraud_accounts": connected_accounts
+    }
+    
+    # Re-calculate aggregated score based on the new graph risk score
+    evaluation.aggregated_score = round(
+        (evaluation.rule_engine_score * settings.FRAUD_RULE_WEIGHT) +
+        (evaluation.ml_anomaly_score * settings.FRAUD_ML_WEIGHT) +
+        (graph_score * settings.FRAUD_GRAPH_WEIGHT),
+        2
+    )
+    
+    # Commit changes back to the database to ensure the cached DB values are corrected
+    db.add(evaluation)
+    db.commit()
+    db.refresh(evaluation)
 
     return evaluation
 

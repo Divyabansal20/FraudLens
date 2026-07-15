@@ -63,7 +63,7 @@ def render_customer_portal(token: str, user_profile: dict):
                                 st.info("Verification Required: The payment is temporarily held. An analyst will review this shortly.")
                             elif status_val == "BLOCKED":
                                 st.error(f"Transaction #{tx_id} Blocked by FraudLens Security.")
-                                st.error("Reason: This payment exhibits high fraud indicators and was suspended to protect your account.")
+                                st.error(f"Reason: {res_json.get('customer_explanation', 'This payment exhibits high fraud indicators and was suspended to protect your account.')}")
                         else:
                             st.error(f"API Error ({response.status_code}): {response.text}")
                     except Exception as e:

@@ -3,6 +3,9 @@ import pandas as pd
 import plotly.express as px
 import networkx as nx
 import matplotlib.pyplot as plt
+import re
+import ast
+import numpy as np
 from datetime import datetime
 from utils.api_client import api_client
 
@@ -12,53 +15,216 @@ def draw_network_graph(tx_details, graph_details):
     Colors blacklisted or suspicious entities in red.
     """
     G = nx.Graph()
+    curr_user = f"u:{tx_details['sender_id']}"
     
-    # Core nodes
-    user_node = f"User {tx_details['sender_id']}"
-    device_node = f"Device: {tx_details['device_id']}"
-    receiver_node = f"Receiver: {tx_details['receiver_name']}"
-    ip_node = f"IP: {tx_details['ip_address']}"
-    
-    G.add_node(user_node, category="user")
-    G.add_node(device_node, category="device")
-    G.add_node(receiver_node, category="receiver")
-    G.add_node(ip_node, category="ip")
-    
-    # Establish edges
-    G.add_edge(user_node, device_node)
-    G.add_edge(user_node, receiver_node)
-    G.add_edge(user_node, ip_node)
-    
-    # Map color scheme
-    color_map = []
-    patterns_text = " ".join(graph_details.get("detected_patterns", [])).lower()
-    
-    for node in G.nodes():
-        node_cat = G.nodes[node]["category"]
-        if node_cat == "user":
-            color_map.append("#1f77b4")  # Safe blue for user
-        elif node_cat == "device" and ("device" in patterns_text or "compromised" in tx_details['device_id'].lower()):
-            color_map.append("#d62728")  # Flagged red
-        elif node_cat == "receiver" and ("receiver" in patterns_text or "blacklist" in tx_details['receiver_name'].lower()):
-            color_map.append("#d62728")  # Flagged red
-        elif node_cat == "ip" and ("ip" in patterns_text or "blacklist" in tx_details['ip_address'].lower()):
-            color_map.append("#d62728")  # Flagged red
+    # Helper to add node with category details
+    def add_network_node(node_id, is_suspicious=False):
+        if node_id.startswith("u:"):
+            label = f"User {node_id.split(':')[1]}"
+            cat = "user"
+        elif node_id.startswith("d:"):
+            label = f"Device:\n{node_id.split(':')[1]}"
+            cat = "device"
+        elif node_id.startswith("ip:"):
+            label = f"IP:\n{node_id.split(':')[1]}"
+            cat = "ip"
+        elif node_id.startswith("r:"):
+            label = f"Receiver:\n{node_id.split(':')[1].title()}"
+            cat = "receiver"
+        elif node_id.startswith("m:"):
+            label = f"Merchant:\n{node_id.split(':')[1].title()}"
+            cat = "merchant"
         else:
-            color_map.append("#2ca02c")  # Safe green for others
+            label = node_id
+            cat = "unknown"
             
-    fig, ax = plt.subplots(figsize=(6, 3.5))
-    pos = nx.shell_layout(G)
+        G.add_node(node_id, label=label, category=cat, suspicious=is_suspicious)
+
+    # 1. Extract paths from detected patterns
+    patterns = graph_details.get("detected_patterns", [])
+    suspicious_nodes = set()
+    paths_to_draw = []
     
-    nx.draw(
-        G, pos, with_labels=True, node_color=color_map,
-        node_size=1500, font_size=8, font_weight="bold",
-        edge_color="#aaaaaa", width=2, ax=ax
+    for pat in patterns:
+        # Look for path list pattern like: ['u:11', 'm:retail', 'u:9', 'd:One_plus_nord_5']
+        match = re.search(r"via path\s+(\[.*?\])", pat)
+        if match:
+            try:
+                # Parse list string, e.g. "['u:11', 'm:retail']"
+                path_list = ast.literal_eval(match.group(1))
+                if isinstance(path_list, list) and len(path_list) > 1:
+                    paths_to_draw.append(path_list)
+                    suspicious_nodes.add(path_list[-1])
+            except Exception as e:
+                pass
+        else:
+            match_direct = re.search(r"suspicious node '(.*?)'", pat)
+            if match_direct:
+                s_node = match_direct.group(1)
+                suspicious_nodes.add(s_node)
+                paths_to_draw.append([curr_user, s_node])
+
+    # CRITICAL CLEANUP: Filter out any path that goes through merchant category nodes ('m:retail' etc.)
+    # to eliminate massive, useless, safe connection loops.
+    paths_to_draw = [p for p in paths_to_draw if not any(node.startswith('m:') for node in p)]
+
+    # If no threat paths were found after filtering (or if it was a safe transaction), draw the basic starburst of current entities
+    if not paths_to_draw:
+        add_network_node(curr_user)
+        curr_device = f"d:{tx_details['device_id']}" if tx_details.get('device_id') else None
+        curr_receiver = f"r:{tx_details['receiver_name'].lower()}" if tx_details.get('receiver_name') else None
+        curr_ip = f"ip:{tx_details['ip_address']}" if tx_details.get('ip_address') else None
+        
+        if curr_device:
+            add_network_node(curr_device)
+            G.add_edge(curr_user, curr_device)
+        if curr_receiver:
+            add_network_node(curr_receiver)
+            G.add_edge(curr_user, curr_receiver)
+        if curr_ip:
+            add_network_node(curr_ip)
+            G.add_edge(curr_user, curr_ip)
+    else:
+        # Draw ONLY the threat paths to keep the visualization highly readable and focused
+        for path_list in paths_to_draw:
+            for i in range(len(path_list)):
+                node_id = path_list[i]
+                is_target = (i == len(path_list) - 1)
+                add_network_node(node_id, is_suspicious=is_target)
+                if i > 0:
+                    G.add_edge(path_list[i-1], path_list[i])
+
+    # Assign colors and borders based on entity type
+    color_map = []
+    edge_colors = []
+    linewidths = []
+    labels = {}
+    for node in G.nodes():
+        node_data = G.nodes[node]
+        labels[node] = node_data.get("label", node)
+        
+        # Color logic: Fraud target is red, current user is blue, others based on entity type
+        if node_data.get("suspicious", False) or node in suspicious_nodes:
+            color_map.append("#de2d26")  # Crimson Red for threats
+            edge_colors.append("#330000")
+            linewidths.append(1.5)
+        elif node == curr_user:
+            color_map.append("#3182bd")  # Safe Subject Blue
+            edge_colors.append("#08519c")
+            linewidths.append(1.5)
+        else:
+            cat = node_data.get("category", "unknown")
+            if cat == "user":
+                color_map.append("#fdd0a2")  # Orange for other users
+                edge_colors.append("#d94801")
+                linewidths.append(1.0)
+            elif cat == "device":
+                color_map.append("#a1d99b")  # Green for hardware devices
+                edge_colors.append("#006d2c")
+                linewidths.append(1.0)
+            elif cat == "ip":
+                color_map.append("#dadaeb")  # Purple for IP nodes
+                edge_colors.append("#54278f")
+                linewidths.append(1.0)
+            elif cat == "receiver":
+                color_map.append("#fa9fb5")  # Pink for receivers
+                edge_colors.append("#ae017e")
+                linewidths.append(1.0)
+            else:
+                color_map.append("#e0e0e0")  # Safe gray for others
+                edge_colors.append("#666666")
+                linewidths.append(1.0)
+
+    fig, ax = plt.subplots(figsize=(7.5, 4.8))
+    
+    # Use spring layout with large spacing (k=2.0) to ensure clear visualization
+    pos = nx.spring_layout(G, k=2.0, seed=42)
+    
+    # 1. Draw Edges
+    nx.draw_networkx_edges(G, pos, edge_color="#cccccc", width=1.5, ax=ax)
+    
+    # 2. Draw Nodes as large colored circles
+    nx.draw_networkx_nodes(
+        G, pos, node_color=color_map, node_size=900,
+        edgecolors=edge_colors, linewidths=linewidths, ax=ax
     )
+    
+    # 3. Offset labels slightly below nodes to keep node colors visible
+    pos_labels = {k: v - np.array([0, 0.15]) for k, v in pos.items()}
+    nx.draw_networkx_labels(
+        G, pos_labels, labels=labels, font_size=8, font_color="#111111",
+        font_weight="bold", ax=ax
+    )
+    
+    # Pad margins to prevent labels from being clipped at the edges
+    ax.margins(0.2)
+    ax.axis("off")
+    
     # Set background color to match dashboard layout
     fig.patch.set_facecolor('#ffffff')
     ax.set_facecolor('#ffffff')
     plt.tight_layout()
     return fig
+
+def render_graph_connection_audit(patterns):
+    """
+    Renders all graph connection path alerts into a single cohesive,
+    structured markdown container for the analyst to audit.
+    """
+    if not patterns:
+        return
+
+    direct_links = []
+    indirect_links = []
+    shared_devices = []
+    other_patterns = []
+
+    for p in patterns:
+        if "Direct link" in p:
+            direct_links.append(p)
+        elif "Indirect connection" in p:
+            indirect_links.append(p)
+        elif "Shared device" in p:
+            shared_devices.append(p)
+        else:
+            other_patterns.append(p)
+
+    content = []
+    content.append("### 🕸️ Graph Network Relationship Audit")
+    content.append("A consolidated review of relationship connections and shared entity footprints detected by the network graph engine:")
+    content.append("---")
+
+    if direct_links:
+        content.append("#### 🚨 Direct Threat Connections (1-Hop)")
+        content.append("The transaction is directly connected to blacklisted or confirmed fraudulent entities:")
+        for dl in direct_links:
+            clean = dl.replace("Direct link (1 hop) to suspicious node ", "Link to ").replace("'", "`")
+            content.append(f"- **{clean}**")
+        content.append("")
+
+    if indirect_links:
+        content.append("#### ⚠️ Shared Footprint & Hop Analysis")
+        content.append("The relation graph has traced multi-hop paths to flagged/suspended nodes, revealing shared device, location, or IP footprints:")
+        for il in indirect_links:
+            clean = il.replace("Indirect connection ", "").replace("to suspicious node ", "").replace("via path ", "through ").replace("'", "`")
+            content.append(f"- **{clean}**")
+        content.append("")
+
+    if shared_devices:
+        content.append("#### 📱 Syndicate & Device-Sharing Activity")
+        content.append("Multiple distinct user accounts have processed payments using the same hardware device fingerprint:")
+        for sd in shared_devices:
+            content.append(f"- **{sd}**")
+        content.append("")
+
+    if other_patterns:
+        content.append("#### 🔍 Structural Indicators")
+        for op in other_patterns:
+            content.append(f"- **{op}**")
+        content.append("")
+
+    with st.container(border=True):
+        st.markdown("\n".join(content))
 
 def render_analyst_portal(token: str, user_profile: dict):
     st.subheader("FraudLens Investigator Workspace")
@@ -214,19 +380,10 @@ def render_analyst_portal(token: str, user_profile: dict):
                         fig_graph = draw_network_graph(selected_tx, graph_details)
                         st.pyplot(fig_graph)
 
-                # Pattern alerts below ML and Graph pictures in horizontal cards beside each other (2 cards per row)
+                # Pattern alerts below ML and Graph pictures
                 patterns = graph_details.get("detected_patterns", [])
                 if patterns:
-                    st.markdown("#### Detected Network Connection Alerts")
-                    for i in range(0, len(patterns), 2):
-                        col_p1, col_p2 = st.columns(2)
-                        with col_p1:
-                            with st.container(border=True):
-                                st.warning(f"Connection Pattern Alert:\n\n{patterns[i]}")
-                        if i + 1 < len(patterns):
-                            with col_p2:
-                                with st.container(border=True):
-                                    st.warning(f"Connection Pattern Alert:\n\n{patterns[i+1]}")
+                    render_graph_connection_audit(patterns)
 
                 # 4. AI/LLM Security Explanations (Full width, stacked vertically)
                 st.markdown("### AI Generative Explanations")
@@ -293,3 +450,123 @@ def render_analyst_portal(token: str, user_profile: dict):
                 })
             df_blocked = pd.DataFrame(blocked_data)
             st.dataframe(df_blocked, use_container_width=True, hide_index=True)
+
+            # Dropdown selector to inspect a specific blocked transaction
+            st.markdown("---")
+            st.markdown("### Select a Blocked Transaction to Run Audit")
+            blocked_options = {
+                f"ID #{b['id']} | User {b['sender_id']} to {b['receiver_name']} (₹{b['amount']:,}) - Score: {b.get('aggregated_score', 'N/A')}": b
+                for b in blocked_queue
+            }
+            selected_blocked_label = st.selectbox(
+                "Blocked Case Target", 
+                list(blocked_options.keys()), 
+                key="blocked_case_target"
+            )
+            
+            if selected_blocked_label:
+                selected_blocked_tx = blocked_options[selected_blocked_label]
+                
+                # Fetch detailed evaluation
+                try:
+                    with st.spinner("Fetching full risk evaluation report..."):
+                        evaluation = api_client.get_transaction_evaluation(token, selected_blocked_tx["id"])
+                except Exception as e:
+                    st.error(f"Failed to fetch evaluation details: {e}")
+                else:
+                    # Visual Divider separating case file from selection dropdown
+                    st.markdown("---")
+                    st.markdown(f"## Blocked Transaction Case File: ID #{selected_blocked_tx['id']}")
+
+                    # 1. Transaction Summary Block
+                    with st.container(border=True):
+                        st.markdown("#### Transaction Summary")
+                        col_det1, col_det2, col_det3, col_det4 = st.columns(4)
+                        with col_det1:
+                            st.markdown(f"**Transaction ID**: {selected_blocked_tx['id']}\n\n**Sender ID**: {selected_blocked_tx['sender_id']}")
+                        with col_det2:
+                            st.markdown(f"**Receiver Name**: {selected_blocked_tx['receiver_name']}\n\n**Amount**: ₹{selected_blocked_tx['amount']:,}")
+                        with col_det3:
+                            st.markdown(f"**Device ID**: {selected_blocked_tx['device_id']}\n\n**Payment Method**: {selected_blocked_tx['payment_method']}")
+                        with col_det4:
+                            st.markdown(f"**Location**: {selected_blocked_tx['city']}, {selected_blocked_tx.get('country', 'IN')}\n\n**Submitted**: {datetime.fromisoformat(selected_blocked_tx['created_at']).strftime('%Y-%m-%d %H:%M') if 'created_at' in selected_blocked_tx else 'N/A'}")
+                        
+                        st.markdown("---")
+                        # Risk Aggregation inside summary
+                        score = evaluation.get("aggregated_score", 0.0)
+                        col_score, col_conf = st.columns([2, 1])
+                        with col_score:
+                            if score >= 80.0:
+                                st.error(f"Aggregated Score: **{score}/100** (CRITICAL RISK)")
+                            elif score >= 38.0:
+                                st.warning(f"Aggregated Score: **{score}/100** (MEDIUM RISK)")
+                            else:
+                                st.success(f"Aggregated Score: **{score}/100** (LOW RISK)")
+                        with col_conf:
+                            st.info(f"System Confidence: {evaluation.get('confidence', 0.5) * 100:.0f}%")
+
+                    # 2. Rule Engine Trigger Status
+                    with st.container(border=True):
+                        st.markdown("#### Triggered Security Rules")
+                        
+                        rules_data = []
+                        for rule in evaluation.get("triggered_rules", []):
+                            status_str = "TRIGGERED" if rule.get("triggered", False) else "SAFE"
+                            contrib_val = f"+{rule.get('score_contribution')}" if rule.get("triggered", False) else "0.0"
+                            check_name = f"{rule.get('rule_name')} (Status: {status_str} | Contrib: {contrib_val})"
+                            rules_data.append({
+                                "Security Check": check_name,
+                                "Findings & Rationale": rule.get("reason")
+                            })
+                        
+                        if rules_data:
+                            st.dataframe(pd.DataFrame(rules_data), use_container_width=True, hide_index=True)
+                        else:
+                            st.info("No security rules triggered.")
+
+                    # 3. Engine Diagnostics Audits
+                    st.markdown("### Engine Diagnostics Audits")
+                    col_ml, col_graph = st.columns(2)
+                    
+                    with col_ml:
+                        with st.container(border=True):
+                            st.markdown("#### Machine Learning Anomaly Diagnostics")
+                            ml_details = evaluation.get("ml_details", {})
+                            st.metric("ML Anomaly Score", f"{ml_details.get('anomaly_score', 0.0)}/100")
+                            
+                            contribs = ml_details.get("feature_contributions", {})
+                            if contribs:
+                                df_contribs = pd.DataFrame([
+                                    {"Feature": feat.replace("_", " ").title(), "Contribution": weight * 100}
+                                    for feat, weight in contribs.items()
+                                ])
+                                fig = px.bar(
+                                    df_contribs, x="Contribution", y="Feature", orientation="h",
+                                    title="Feature Contribution Weights (%)",
+                                    color_discrete_sequence=["#1f77b4"]
+                                )
+                                fig.update_layout(height=200, margin=dict(l=0, r=0, t=30, b=0))
+                                st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.info("No feature contributions available.")
+
+                    with col_graph:
+                        with st.container(border=True):
+                            st.markdown("#### Graph Relationship Network Analysis")
+                            graph_details = evaluation.get("graph_details", {})
+                            st.metric("Graph Risk Score", f"{graph_details.get('risk_score', 0.0)}/100")
+                            
+                            fig_graph = draw_network_graph(selected_blocked_tx, graph_details)
+                            st.pyplot(fig_graph)
+
+                    # Pattern alerts below ML and Graph
+                    patterns = graph_details.get("detected_patterns", [])
+                    if patterns:
+                        render_graph_connection_audit(patterns)
+
+                    # 4. AI/LLM Security Explanations
+                    st.markdown("### AI Generative Explanations")
+                    with st.container(border=True):
+                        st.info(f"**Customer-Facing Security Notice**\n\n\"{evaluation.get('customer_explanation', 'N/A')}\"")
+                        st.info(f"**Investigator Security Analysis Summary**\n\n{evaluation.get('analyst_explanation', 'N/A')}")
+
