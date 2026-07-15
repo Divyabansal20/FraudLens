@@ -1,8 +1,17 @@
 import requests
+import os
 from typing import Dict, Any, List, Optional
 
 class FraudLensAPIClient:
-    def __init__(self, base_url: str = "http://127.0.0.1:8000/api/v1"):
+    def __init__(self, base_url: Optional[str] = None):
+        if not base_url:
+            backend_env = os.getenv("BACKEND_API_URL")
+            if backend_env:
+                base_url = backend_env.rstrip("/")
+                if not base_url.endswith("/api/v1"):
+                    base_url = f"{base_url}/api/v1"
+            else:
+                base_url = "http://127.0.0.1:8000/api/v1"
         self.base_url = base_url
 
     def _get_headers(self, token: Optional[str] = None) -> Dict[str, str]:
