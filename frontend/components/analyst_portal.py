@@ -382,7 +382,7 @@ def render_analyst_portal(token: str, user_profile: dict):
                                 color_discrete_sequence=["#1f77b4"]
                             )
                             fig.update_layout(height=200, margin=dict(l=0, r=0, t=30, b=0))
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, use_container_width=True, key=f"review_ml_chart_{selected_tx['id']}")
                         else:
                             st.info("No feature contributions available.")
 
@@ -586,7 +586,7 @@ def render_analyst_portal(token: str, user_profile: dict):
                                     color_discrete_sequence=["#1f77b4"]
                                 )
                                 fig.update_layout(height=200, margin=dict(l=0, r=0, t=30, b=0))
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig, use_container_width=True, key=f"blocked_ml_chart_{selected_blocked_tx['id']}")
                             else:
                                 st.info("No feature contributions available.")
 
