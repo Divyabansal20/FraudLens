@@ -327,25 +327,33 @@ pytest
 ```
 
 ---
+## Screenshots
 
-# Screenshots
+### Login Page
 
-## Analyst Dashboard
-
-> *(Add screenshot here)*
-
----
-
-## Transaction Investigation
-
-> *(Add screenshot here)*
+![Login Page](assets/Login_fraudlens.png)
 
 ---
 
-## Customer Dashboard
+### Customer Dashboard
 
-> *(Add screenshot here)*
+![Customer Dashboard](assets/Customar_dashboard.png)
 
+![Successful Transaction](assets/Success_pay_fraudlens.png)
+
+![Transaction Under Review](assets/Pay_under_review.png)
+
+---
+
+### Analyst Dashboard
+
+![Analyst Dashboard](assets/analyst_dash.png)
+
+![Analyst Dashboard 2](assets/analyst2.png)
+
+![Analyst Dashboard 3](assets/analyst3.png)
+
+![Analyst Dashboard 4](assets/analyst4.png)
 ---
 
 # Future Improvements
